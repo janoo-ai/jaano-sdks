@@ -85,8 +85,8 @@ jobs:
 
       - name: 4a. Pack npm packages (dry run) and check contents
         run: |
-          npm --prefix js pack --dry-run
-          npm --prefix widget pack --dry-run
+          (cd js && npm pack --dry-run)
+          (cd widget && npm pack --dry-run)
 
       - name: 4b. Build & check Python wheel and sdist
         working-directory: python
