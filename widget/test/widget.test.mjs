@@ -160,9 +160,14 @@ describe("@jaano-sdk/widget — lifecycle, events & origin pinning", () => {
     const iframe = widget._iframe;
     iframe.dispatch("load", {});
     assert.equal(ready, 1);
-    assert.equal(posted.length, 1);
+    assert.equal(posted.length, 2);
     assert.equal(posted[0].origin, DEFAULT_WIDGET_ORIGIN);
     assert.deepEqual(posted[0].msg, {
+      type: "JAANO_WIDGET_INIT",
+      source: "jaano_widget_pkg",
+    });
+    assert.equal(posted[1].origin, DEFAULT_WIDGET_ORIGIN);
+    assert.deepEqual(posted[1].msg, {
       type: "SUBMIT_QUESTION",
       payload: { question: "What are your pricing plans?" },
     });
@@ -209,5 +214,48 @@ describe("@jaano-sdk/widget — lifecycle, events & origin pinning", () => {
     assert.equal(widget.isMounted, false);
     assert.equal(body.children.length, 0);
     assert.equal(win.listenerCount("message"), 0);
+  });
+
+  it("re-sends JAANO_WIDGET_INIT and CHAT_OPENED when iframe announces JAANO_IFRAME_READY", () => {
+    const { win, doc, posted } = createDomHarness();
+    let readyCalls = 0;
+    const widget = new JaanoWidget({
+      chatbotId: "bot_1",
+      userId: "usr_1",
+      position: "topLeft",
+      onReady: () => (readyCalls += 1),
+      _window: win,
+      _document: doc,
+    });
+
+    // Open BEFORE iframe finishes loading
+    widget.open();
+    assert.equal(widget._button.style.top, "20px");
+    assert.equal(widget._button.style.bottom, "auto");
+    assert.equal(widget._button.style.left, "20px");
+
+    posted.length = 0; // clear pre-load postMessage that React would have missed
+    win.dispatchMessage({
+      origin: DEFAULT_WIDGET_ORIGIN,
+      source: widget._iframe.contentWindow,
+      data: { type: "JAANO_IFRAME_READY" },
+    });
+
+    assert.equal(readyCalls, 1);
+    assert.deepEqual(
+      posted.map((p) => p.msg.type),
+      ["JAANO_WIDGET_INIT", "CHAT_OPENED"],
+    );
+
+    // Null source must be rejected when iframe.contentWindow exists
+    const leads = [];
+    widget._config.onLead = (l) => leads.push(l);
+    win.dispatchMessage({
+      origin: DEFAULT_WIDGET_ORIGIN,
+      source: null,
+      data: { type: "LEAD_CAPTURED", payload: { name: "Spoof" } },
+    });
+    assert.equal(leads.length, 0);
+    widget.destroy();
   });
 });

@@ -1,13 +1,16 @@
 """Jaano Enterprise Developer API v1 Python client."""
 from __future__ import annotations
 
+import email.utils
 import json
+import math
 import socket
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Optional
 
 from ._generated_types import OPENAPI_VERSION
@@ -17,6 +20,17 @@ from .webhooks import verify_webhook_signature
 SDK_VERSION = OPENAPI_VERSION
 DEFAULT_BASE_URL = "https://api.jaano.ai/v1"
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+_IDEMPOTENT_METHODS = {"GET", "HEAD", "PUT", "DELETE", "OPTIONS"}
+DEFAULT_MAX_RETRY_DELAY_SECONDS = 30.0
+
+
+def _is_retry_safe(method: str, headers: Mapping[str, str], status: Optional[int]) -> bool:
+    # 429 means the server rejected the request before executing it.
+    if status == 429:
+        return True
+    if method.upper() in _IDEMPOTENT_METHODS:
+        return True
+    return any(k.lower() == "idempotency-key" for k in headers)
 
 
 @dataclass(frozen=True)
@@ -55,8 +69,15 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
         return None
     try:
         secs = float(value)
-        return secs if secs >= 0 else None
+        return secs if math.isfinite(secs) and secs >= 0 else None
     except ValueError:
+        pass
+    try:
+        dt = email.utils.parsedate_to_datetime(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0.0, (dt - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
         return None
 
 
@@ -103,6 +124,15 @@ class WorkspaceResource(_Resource):
 
     def create_api_key(self, body: Mapping[str, Any]) -> dict[str, Any]:
         return self._client._request("POST", "/api-keys", body=body)
+
+    def rotate_api_key(
+        self, key_id: str, body: Optional[Mapping[str, Any]] = None
+    ) -> dict[str, Any]:
+        return self._client._request(
+            "POST",
+            f"/api-keys/{_encode_segment(key_id, 'key_id')}/rotate",
+            body=body if body is not None else {},
+        )
 
     def revoke_api_key(self, key_id: str) -> dict[str, Any]:
         return self._client._request("DELETE", f"/api-keys/{_encode_segment(key_id, 'key_id')}")
@@ -275,17 +305,22 @@ class JaanoClient:
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         retry_base_delay_seconds: float = 0.25,
+        max_retry_delay_seconds: float = DEFAULT_MAX_RETRY_DELAY_SECONDS,
         transport: Optional[Transport] = None,
         sleep: Optional[Callable[[float], None]] = None,
     ) -> None:
         key = str(api_key or "").strip()
         if not key:
             raise ValueError("JaanoClient requires a non-empty api_key.")
+        timeout = float(timeout_seconds)
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout_seconds must be a positive finite number.")
         self._api_key = key
         self._base_url = str(base_url or DEFAULT_BASE_URL).rstrip("/")
-        self._timeout_seconds = float(timeout_seconds)
+        self._timeout_seconds = timeout
         self._max_retries = max(0, int(max_retries))
         self._retry_base_delay = max(0.0, float(retry_base_delay_seconds))
+        self._max_retry_delay = max(0.0, float(max_retry_delay_seconds))
         self._transport = transport or _default_transport
         self._sleep = sleep or time.sleep
 
@@ -332,9 +367,13 @@ class JaanoClient:
                     method, url, req_headers, serialized, self._timeout_seconds
                 )
             except (JaanoTimeoutError, JaanoNetworkError):
-                if attempt < self._max_retries:
+                if attempt < self._max_retries and _is_retry_safe(method, req_headers, None):
                     attempt += 1
-                    self._sleep(self._retry_base_delay * (2 ** (attempt - 1)))
+                    delay = min(
+                        self._max_retry_delay,
+                        self._retry_base_delay * (2 ** (attempt - 1)),
+                    )
+                    self._sleep(delay)
                     continue
                 raise
 
@@ -349,14 +388,18 @@ class JaanoClient:
                 return parsed
 
             retry_after = _parse_retry_after(resp.headers.get("retry-after"))
-            if resp.status in _RETRYABLE_STATUSES and attempt < self._max_retries:
+            if (
+                resp.status in _RETRYABLE_STATUSES
+                and attempt < self._max_retries
+                and _is_retry_safe(method, req_headers, resp.status)
+            ):
                 attempt += 1
-                delay = (
+                raw_delay = (
                     retry_after
                     if retry_after is not None
                     else self._retry_base_delay * (2 ** (attempt - 1))
                 )
-                self._sleep(delay)
+                self._sleep(min(self._max_retry_delay, raw_delay))
                 continue
 
             err_obj = parsed if isinstance(parsed, dict) else {}

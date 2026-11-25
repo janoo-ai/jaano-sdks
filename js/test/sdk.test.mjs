@@ -29,9 +29,11 @@ function mockResponse(status, body, headers = {}) {
 }
 
 describe("@jaano-sdk/js — configuration & version sync", () => {
-  it("requires a non-empty apiKey", () => {
+  it("requires a non-empty apiKey and positive timeoutMs", () => {
     assert.throws(() => new JaanoClient(), TypeError);
     assert.throws(() => new JaanoClient({ apiKey: "   " }), TypeError);
+    assert.throws(() => new JaanoClient({ apiKey: "jaano_live_test", timeoutMs: 0 }), TypeError);
+    assert.throws(() => new JaanoClient({ apiKey: "jaano_live_test", timeoutMs: -5 }), TypeError);
   });
 
   it("matches the OpenAPI spec version", () => {
@@ -111,6 +113,27 @@ describe("@jaano-sdk/js — resource endpoints", () => {
     });
     assert.throws(() => client.agents.get(""), TypeError);
     assert.throws(() => client.calls.hangup("   "), TypeError);
+  });
+
+  it("rotates API keys via POST /api-keys/:keyId/rotate", async () => {
+    const seen = [];
+    const client = new JaanoClient({
+      apiKey: "jaano_live_test",
+      fetch: async (url, init) => {
+        seen.push({ url, method: init.method, body: init.body });
+        return mockResponse(201, {
+          rotated: true,
+          key_id: "key_new",
+          api_key: "jaano_live_new",
+          previous_key: { key_id: "key_old" },
+        });
+      },
+    });
+    const res = await client.workspace.rotateApiKey("key_old", { grace_period_seconds: 3600 });
+    assert.equal(res.rotated, true);
+    assert.equal(seen[0].method, "POST");
+    assert.equal(seen[0].url, "https://api.jaano.ai/v1/api-keys/key_old/rotate");
+    assert.deepEqual(JSON.parse(seen[0].body), { grace_period_seconds: 3600 });
   });
 });
 
@@ -203,6 +226,64 @@ describe("@jaano-sdk/js — retries, errors, and timeouts", () => {
 
     await assert.rejects(() => client.workspace.me(), JaanoNetworkError);
   });
+
+  it("does NOT retry non-idempotent POST on 5xx without Idempotency-Key, but DOES retry with it", async () => {
+    let callsNoKey = 0;
+    const clientNoKey = new JaanoClient({
+      apiKey: "jaano_live_test",
+      maxRetries: 2,
+      sleep: async () => {},
+      fetch: async () => {
+        callsNoKey += 1;
+        return mockResponse(503, { code: "service_unavailable", message: "Upstream busy" });
+      },
+    });
+    await assert.rejects(
+      () => clientNoKey.calls.create({ agent_id: "a", to: "+15555550100" }),
+      JaanoApiError,
+    );
+    assert.equal(callsNoKey, 1, "POST without Idempotency-Key must not be retried on 503");
+
+    let callsWithKey = 0;
+    const clientWithKey = new JaanoClient({
+      apiKey: "jaano_live_test",
+      maxRetries: 2,
+      sleep: async () => {},
+      fetch: async () => {
+        callsWithKey += 1;
+        if (callsWithKey === 1) {
+          return mockResponse(503, { code: "service_unavailable", message: "Upstream busy" });
+        }
+        return mockResponse(201, { call_id: "call_ok" });
+      },
+    });
+    const out = await clientWithKey.calls.create(
+      { agent_id: "a", to: "+15555550100" },
+      { idempotencyKey: "idem-safe-1" },
+    );
+    assert.equal(out.call_id, "call_ok");
+    assert.equal(callsWithKey, 2);
+  });
+
+  it("caps Retry-After delay at maxRetryDelayMs", async () => {
+    const sleeps = [];
+    let calls = 0;
+    const client = new JaanoClient({
+      apiKey: "jaano_live_test",
+      maxRetries: 1,
+      maxRetryDelayMs: 5000,
+      sleep: async (ms) => sleeps.push(ms),
+      fetch: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return mockResponse(429, { code: "rate_limited" }, { "retry-after": "86400" });
+        }
+        return mockResponse(200, { ok: true });
+      },
+    });
+    await client.workspace.me();
+    assert.deepEqual(sleeps, [5000]);
+  });
 });
 
 describe("@jaano-sdk/js — webhook HMAC verification", () => {
@@ -237,6 +318,10 @@ describe("@jaano-sdk/js — webhook HMAC verification", () => {
     );
     assert.throws(
       () => verifyWebhookSignature(rawBody, "not-a-valid-header", secret, { nowSeconds: now }),
+      JaanoWebhookVerificationError,
+    );
+    assert.throws(
+      () => verifyWebhookSignature(rawBody, `t=${now}.5,v0=${"a".repeat(64)}`, secret, { nowSeconds: now }),
       JaanoWebhookVerificationError,
     );
   });

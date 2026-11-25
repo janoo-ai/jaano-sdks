@@ -36,11 +36,17 @@ export function verifyWebhookSignature(rawBody, signatureHeader, secret, options
     if (k && v) parts[k] = v;
   }
 
-  const timestamp = Number(parts.t);
+  const rawTs = parts.t;
   const signature = parts.v0;
-  if (!Number.isFinite(timestamp) || !signature || !/^[0-9a-f]+$/i.test(signature)) {
+  if (
+    !rawTs ||
+    !/^\d+$/.test(rawTs) ||
+    !signature ||
+    !/^[0-9a-f]{64}$/i.test(signature)
+  ) {
     throw new JaanoWebhookVerificationError("Malformed Jaano-Signature header.");
   }
+  const timestamp = Number(rawTs);
 
   if (toleranceSeconds > 0 && Math.abs(nowSeconds - timestamp) > toleranceSeconds) {
     throw new JaanoWebhookVerificationError(

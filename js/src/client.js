@@ -9,6 +9,15 @@ export const SDK_VERSION = "1.3.0";
 export const DEFAULT_BASE_URL = "https://api.jaano.ai/v1";
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"]);
+const DEFAULT_MAX_RETRY_DELAY_MS = 30_000;
+
+function isRetrySafe(method, headers, status) {
+  // 429 means the server rejected the request before executing it.
+  if (status === 429) return true;
+  if (IDEMPOTENT_METHODS.has(String(method || "").toUpperCase())) return true;
+  return Object.keys(headers || {}).some((k) => k.toLowerCase() === "idempotency-key");
+}
 
 function encodeSegment(value, name) {
   const s = String(value ?? "").trim();
@@ -63,9 +72,14 @@ export class JaanoClient {
     }
     this._apiKey = apiKey;
     this._baseUrl = String(config.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
-    this._timeoutMs = config.timeoutMs ?? 30_000;
+    const timeoutMs = config.timeoutMs === undefined ? 30_000 : Number(config.timeoutMs);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      throw new TypeError("timeoutMs must be a positive finite number.");
+    }
+    this._timeoutMs = timeoutMs;
     this._maxRetries = Math.max(0, Number(config.maxRetries ?? 2));
     this._retryBaseDelayMs = Math.max(0, Number(config.retryBaseDelayMs ?? 250));
+    this._maxRetryDelayMs = Math.max(0, Number(config.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS));
     this._fetch = config.fetch || globalThis.fetch;
     this._sleep = config.sleep || defaultSleep;
 
@@ -78,6 +92,8 @@ export class JaanoClient {
       wallet: () => this._request("GET", "/wallet"),
       listApiKeys: () => this._request("GET", "/api-keys"),
       createApiKey: (body) => this._request("POST", "/api-keys", { body }),
+      rotateApiKey: (keyId, body = {}) =>
+        this._request("POST", `/api-keys/${encodeSegment(keyId, "keyId")}/rotate`, { body }),
       revokeApiKey: (keyId) =>
         this._request("DELETE", `/api-keys/${encodeSegment(keyId, "keyId")}`),
     };
@@ -204,17 +220,26 @@ export class JaanoClient {
         });
       } catch (err) {
         clearTimeout(timer);
+        const canRetry = attempt < this._maxRetries && isRetrySafe(method, reqHeaders, null);
         if (err?.name === "AbortError") {
-          if (attempt < this._maxRetries) {
+          if (canRetry) {
             attempt += 1;
-            await this._sleep(this._retryBaseDelayMs * 2 ** (attempt - 1));
+            const delayMs = Math.min(
+              this._maxRetryDelayMs,
+              this._retryBaseDelayMs * 2 ** (attempt - 1),
+            );
+            await this._sleep(delayMs);
             continue;
           }
           throw new JaanoTimeoutError(this._timeoutMs);
         }
-        if (attempt < this._maxRetries) {
+        if (canRetry) {
           attempt += 1;
-          await this._sleep(this._retryBaseDelayMs * 2 ** (attempt - 1));
+          const delayMs = Math.min(
+            this._maxRetryDelayMs,
+            this._retryBaseDelayMs * 2 ** (attempt - 1),
+          );
+          await this._sleep(delayMs);
           continue;
         }
         throw new JaanoNetworkError(err?.message || "Network request failed", err);
@@ -237,13 +262,17 @@ export class JaanoClient {
       }
 
       const retryAfterSeconds = parseRetryAfter(response.headers?.get?.("retry-after"));
-      if (RETRYABLE_STATUSES.has(response.status) && attempt < this._maxRetries) {
+      if (
+        RETRYABLE_STATUSES.has(response.status) &&
+        attempt < this._maxRetries &&
+        isRetrySafe(method, reqHeaders, response.status)
+      ) {
         attempt += 1;
-        const delayMs =
+        const rawDelayMs =
           retryAfterSeconds !== null
             ? retryAfterSeconds * 1000
             : this._retryBaseDelayMs * 2 ** (attempt - 1);
-        await this._sleep(delayMs);
+        await this._sleep(Math.min(this._maxRetryDelayMs, rawDelayMs));
         continue;
       }
 
