@@ -1,0 +1,180 @@
+name: SDK CI & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["sdk-v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate and build without publishing to npm/PyPI"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Gate 0: never let a secret reach a package ───────────────────────────────
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Scan full git history
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            detect --source /repo --redact --exit-code 1
+
+  # ── Gates 1-3: contract, version alignment, tests, package build ─────────────
+  verify:
+    name: Contract, tests & package build
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: 1. Generated types match the OpenAPI snapshot
+        run: node scripts/generate-sdks.mjs --check
+
+      - name: 2. Package versions match the OpenAPI snapshot (and tag, if any)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const spec = JSON.parse(fs.readFileSync("openapi/openapi.v1.json", "utf8"));
+            const v = spec.info.version;
+            const jsV = JSON.parse(fs.readFileSync("js/package.json", "utf8")).version;
+            const wV = JSON.parse(fs.readFileSync("widget/package.json", "utf8")).version;
+            const pyV = (fs.readFileSync("python/pyproject.toml", "utf8").match(/^version\s*=\s*"([^"]+)"/m) || [])[1];
+            if (jsV !== v || wV !== v || pyV !== v) {
+              throw new Error(`Version mismatch: spec=${v} js=${jsV} widget=${wV} python=${pyV}`);
+            }
+            const ref = process.env.GITHUB_REF || "";
+            if (ref.startsWith("refs/tags/sdk-v") && ref.slice("refs/tags/sdk-v".length) !== v) {
+              throw new Error(`Tag ${ref} does not match package version ${v}`);
+            }
+            console.log(`All versions aligned at ${v}`);
+          '
+
+      - name: 3a. Test @jaano-sdk/js
+        working-directory: js
+        run: npm test
+
+      - name: 3b. Test @jaano-sdk/widget
+        working-directory: widget
+        run: npm test
+
+      - name: 3c. Test jaano (Python)
+        working-directory: python
+        run: python -m unittest discover -s tests -v
+
+      - name: 4a. Pack npm packages (dry run) and check contents
+        run: |
+          npm --prefix js pack --dry-run
+          npm --prefix widget pack --dry-run
+
+      - name: 4b. Build & check Python wheel and sdist
+        working-directory: python
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-dist
+          path: python/dist/*
+          retention-days: 7
+
+  # ── Release gates: only on a version tag, or a manual non-dry-run ───────────
+  release-allowed:
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+    steps:
+      - id: decide
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/sdk-v* ]] || \
+             [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "false" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Stage 4a: npm (with provenance). Needs manual approval via environment ──
+  publish-npm:
+    name: Publish @jaano-sdk/js and @jaano-sdk/widget
+    needs: release-allowed
+    if: needs.release-allowed.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write # npm provenance attestation
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish @jaano-sdk/js
+        working-directory: js
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Publish @jaano-sdk/widget
+        working-directory: widget
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+  # ── Stage 4b: PyPI via OIDC Trusted Publishing (no long-lived token) ────────
+  publish-pypi:
+    name: Publish jaano to PyPI
+    needs: release-allowed
+    if: needs.release-allowed.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+
+  # ── Stage 4c: GitHub Release with generated notes ───────────────────────────
+  github-release:
+    name: Create GitHub Release
+    needs: [publish-npm, publish-pypi]
+    if: startsWith(github.ref, 'refs/tags/sdk-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" --generate-notes

@@ -1,0 +1,40 @@
+{
+  "name": "@jaano-sdk/widget",
+  "version": "1.3.0",
+  "description": "Typed browser package for embedding the Jaano AI chat widget without copy-pasted script tags",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "jaano",
+    "chat-widget",
+    "ai-chat",
+    "embed"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janoo-ai/jaano-sdks.git",
+    "directory": "widget"
+  },
+  "homepage": "https://github.com/janoo-ai/jaano-sdks/tree/main/widget#readme",
+  "bugs": {
+    "url": "https://github.com/janoo-ai/jaano-sdks/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

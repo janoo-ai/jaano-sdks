@@ -1,0 +1,4316 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Jaano Enterprise Developer API",
+    "version": "1.3.0",
+    "description": "REST API v1 for Jaano AI voice agents, compliant outbound calling, leads and campaigns, phone numbers, revocable scoped API keys, and HMAC-signed post-call webhooks.\n\nAll requests authenticate with a workspace API key sent as `Authorization: Bearer jaano_live_...`. Errors use a common envelope with a `code` and a `request_id`."
+  },
+  "servers": [
+    {
+      "url": "https://api.jaano.ai/v1",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Workspace",
+      "description": "Identity, wallet credits, and API keys"
+    },
+    {
+      "name": "Agents",
+      "description": "Pipecat voice agent lifecycle and inbound routing"
+    },
+    {
+      "name": "Calls",
+      "description": "Idempotent outbound dialing, hangup, transcripts, and recordings"
+    },
+    {
+      "name": "Leads",
+      "description": "CRM lead management with KMS-encrypted PII"
+    },
+    {
+      "name": "Campaigns",
+      "description": "Outbound campaigns and bulk lead enrollment"
+    },
+    {
+      "name": "Phone Numbers",
+      "description": "Carrier DID provisioning and release"
+    },
+    {
+      "name": "Webhooks",
+      "description": "HMAC-SHA256 signed post-call webhook endpoints and delivery logs"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {
+      "apiKeyHeader": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "jaano_live_..."
+      },
+      "apiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    },
+    "parameters": {
+      "AgentId": {
+        "name": "agentId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "agent_1234567890abcdef"
+        }
+      },
+      "CallId": {
+        "name": "callId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "call_9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
+        }
+      },
+      "LeadId": {
+        "name": "leadId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "lead_8f4c1a2e9b3d4a7c9e1f0b2d3c4a5e6f"
+        }
+      },
+      "CampaignId": {
+        "name": "campaignId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "camp_9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
+        }
+      },
+      "WebhookId": {
+        "name": "webhookId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "wh_fcc834a40a3d49a1bb500de5787f6bb2"
+        }
+      },
+      "KeyId": {
+        "name": "keyId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "example": "key_0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        }
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request is malformed or a required field is missing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The API key is missing, invalid, or revoked.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The API key lacks the required scope, or the plan does not include this feature.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The resource does not exist in this workspace.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Insufficient wallet credits (insufficient_credits).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The request conflicts with the current state of the resource.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Gone": {
+        "description": "The resource was archived or deleted (for example lead_deleted, campaign_archived, agent_archived, transcript_expired).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "A required upstream dependency is unavailable (for example dnd_lookup_failed when strict_dnd is true).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "The request is valid but violates a business rule (for example trai_quiet_hours or dnd_registered).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many requests. See the Retry-After header.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds to wait before retrying."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected server error occurred. Include request_id when contacting support.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "type": "boolean",
+            "const": true
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code.",
+            "example": "validation_error"
+          },
+          "message": {
+            "type": "string",
+            "example": "lead_name is required."
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "b5af2492-8a82-4ad4-adc6-01890d741195"
+          }
+        }
+      },
+      "PageMeta": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 42
+          },
+          "limit": {
+            "type": "integer",
+            "example": 25
+          },
+          "offset": {
+            "type": "integer",
+            "example": 0
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 42
+          },
+          "limit": {
+            "type": "integer",
+            "example": 25
+          },
+          "offset": {
+            "type": "integer",
+            "example": 0
+          },
+          "has_more": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "description": "Arbitrary key-value pairs echoed back in webhooks and reads.",
+        "additionalProperties": true
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "org_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "example": "scale"
+              },
+              "expired_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "voice_blocked": {
+                "type": "boolean"
+              },
+              "entitlements": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "abuse_tier": {
+            "type": "string",
+            "example": "active"
+          },
+          "webhooks": {
+            "type": "object",
+            "properties": {
+              "default_post_call_webhook_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "default_webhook_events": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "api_key": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The API key used for this request, or null for console sessions.",
+            "properties": {
+              "key_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "default_bot_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "max_live_outbound_global": {
+                "type": "integer"
+              },
+              "max_live_inbound_global": {
+                "type": "integer"
+              },
+              "max_api_keys": {
+                "type": "integer",
+                "example": 25
+              }
+            }
+          }
+        }
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "org_id": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "example": "INR"
+          },
+          "credit_unit_value_inr": {
+            "type": "number",
+            "example": 1
+          },
+          "call_credits": {
+            "type": "number"
+          },
+          "reserved_credits": {
+            "type": "number"
+          },
+          "available_credits": {
+            "type": "number"
+          },
+          "plan_type": {
+            "type": "string"
+          },
+          "plan_expired_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "voice_blocked": {
+            "type": "boolean"
+          },
+          "abuse_tier": {
+            "type": "string"
+          },
+          "rate_card": {
+            "type": "object",
+            "properties": {
+              "standard_per_minute": {
+                "type": "number"
+              },
+              "transfer_per_minute": {
+                "type": "number"
+              },
+              "voicemail_flat_plivo": {
+                "type": "number"
+              },
+              "voicemail_flat_exotel": {
+                "type": "number"
+              },
+              "voicemail_max_duration_secs": {
+                "type": "integer"
+              },
+              "min_credits_to_dial": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "ApiKey": {
+        "type": "object",
+        "properties": {
+          "key_id": {
+            "type": "string",
+            "example": "key_0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+          },
+          "name": {
+            "type": "string",
+            "example": "CRM Dialer Backend"
+          },
+          "key_prefix": {
+            "type": "string",
+            "example": "jaano_live_1a2b"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked",
+              "expired"
+            ]
+          },
+          "default_bot_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allowed_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiKeyCreateRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "CRM Dialer Backend"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Scopes to grant. Omit or pass [] for full access (requires an admin caller). A key can only mint keys with scopes it already holds."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Optional expiry. Omit for a non-expiring key."
+          },
+          "allowed_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional IP allowlist."
+          },
+          "default_bot_id": {
+            "type": "string",
+            "description": "Optional default bot for agent creation."
+          }
+        }
+      },
+      "ApiKeyCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiKey"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "api_key": {
+                "type": "string",
+                "description": "The full secret. Shown only once.",
+                "example": "jaano_live_..."
+              },
+              "warning": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "ApiKeyList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKey"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "active_count": {
+                "type": "integer"
+              },
+              "max_active_keys": {
+                "type": "integer",
+                "example": 25
+              },
+              "available_scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ApiKeyRotateRequest": {
+        "type": "object",
+        "properties": {
+          "grace_period_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 604800,
+            "default": 0,
+            "description": "How long the old key keeps working after rotation (0 = revoke immediately, max 7 days)."
+          }
+        }
+      },
+      "ApiKeyRotated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiKeyCreated"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "rotated": {
+                "type": "boolean",
+                "const": true
+              },
+              "previous_key": {
+                "$ref": "#/components/schemas/ApiKey"
+              }
+            }
+          }
+        ]
+      },
+      "ApiKeyRevoked": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "const": true
+          },
+          "key": {
+            "$ref": "#/components/schemas/ApiKey"
+          }
+        }
+      },
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "agent_name": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "company_description": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound"
+            ]
+          },
+          "is_active_inbound": {
+            "type": "boolean"
+          },
+          "agent_type": {
+            "type": "string"
+          },
+          "agent_goal": {
+            "type": "string"
+          },
+          "voice_backend": {
+            "type": "string",
+            "enum": [
+              "pipecat"
+            ]
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ]
+          },
+          "voice_carrier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assigned_phone_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_message": {
+            "type": "string"
+          },
+          "agent_language": {
+            "type": "string",
+            "example": "english"
+          },
+          "additional_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "voice_gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female"
+            ]
+          },
+          "maxdurationseconds": {
+            "type": "integer",
+            "example": 900
+          },
+          "inbound_company_details": {
+            "type": "string"
+          },
+          "platform_settings": {
+            "type": "object",
+            "properties": {
+              "webhooks": {
+                "type": "object",
+                "properties": {
+                  "post_call_webhook_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "events": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentCreateRequest": {
+        "type": "object",
+        "required": [
+          "company_name"
+        ],
+        "properties": {
+          "company_name": {
+            "type": "string",
+            "example": "Acme Realty"
+          },
+          "agent_name": {
+            "type": "string",
+            "example": "Ananya"
+          },
+          "company_description": {
+            "type": "string"
+          },
+          "inbound_company_details": {
+            "type": "string"
+          },
+          "first_message": {
+            "type": "string",
+            "example": "Hi, this is Ananya calling from Acme Realty. Is this a good time?"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound"
+            ],
+            "default": "outbound"
+          },
+          "agent_language": {
+            "type": "string",
+            "example": "english"
+          },
+          "additional_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "voice_gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female"
+            ],
+            "default": "female"
+          },
+          "maxdurationseconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 3600,
+            "default": 900
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ],
+            "default": "indian"
+          },
+          "voice_carrier": {
+            "type": "string"
+          },
+          "assigned_phone_number": {
+            "type": "string"
+          },
+          "agent_type": {
+            "type": "string"
+          },
+          "agent_goal": {
+            "type": "string"
+          },
+          "voice_backend": {
+            "type": "string",
+            "enum": [
+              "pipecat"
+            ],
+            "description": "Only pipecat is accepted on /v1."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Optional. When omitted, the workspace's first bot is used, or one is created."
+          },
+          "platform_settings": {
+            "type": "object",
+            "properties": {
+              "webhooks": {
+                "type": "object",
+                "properties": {
+                  "post_call_webhook_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "AgentUpdateRequest": {
+        "type": "object",
+        "description": "Partial update. Only the fields you send are changed.",
+        "properties": {
+          "company_name": {
+            "type": "string"
+          },
+          "agent_name": {
+            "type": "string"
+          },
+          "company_description": {
+            "type": "string"
+          },
+          "inbound_company_details": {
+            "type": "string"
+          },
+          "first_message": {
+            "type": "string"
+          },
+          "agent_language": {
+            "type": "string"
+          },
+          "additional_languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "voice_gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female"
+            ]
+          },
+          "maxdurationseconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 3600
+          },
+          "platform_settings": {
+            "type": "object",
+            "properties": {
+              "webhooks": {
+                "type": "object",
+                "properties": {
+                  "post_call_webhook_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "AgentCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Agent"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "bot_created": {
+                "type": "boolean",
+                "description": "True when a workspace bot was auto-created."
+              }
+            }
+          }
+        ]
+      },
+      "AgentList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Agent"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "AgentArchived": {
+        "type": "object",
+        "properties": {
+          "archived": {
+            "type": "boolean",
+            "const": true
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentInboundChange": {
+        "type": "object",
+        "properties": {
+          "activated": {
+            "type": "boolean"
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "demoted_agent_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Recording": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "ready",
+              "unavailable"
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short-lived S3 presigned URL. Present only when status is ready."
+          },
+          "url_expires_in_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 900
+          },
+          "transfer": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "CallBilling": {
+        "type": "object",
+        "properties": {
+          "credits_deducted": {
+            "type": "boolean"
+          },
+          "credits_amount": {
+            "type": "number"
+          },
+          "credit_tier": {
+            "type": "string",
+            "example": "standard"
+          },
+          "billing_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "per_minute"
+          },
+          "transfer_credits_amount": {
+            "type": "number"
+          }
+        }
+      },
+      "Call": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "lead_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "completed"
+          },
+          "duration_secs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "carrier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "exotel"
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ]
+          },
+          "conversation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "billing": {
+            "$ref": "#/components/schemas/CallBilling"
+          },
+          "recording": {
+            "$ref": "#/components/schemas/Recording"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CallCreateRequest": {
+        "type": "object",
+        "required": [
+          "agent_id",
+          "to"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "example": "agent_1234567890abcdef"
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination in E.164 format.",
+            "example": "+15555550100"
+          },
+          "from_phone_number": {
+            "type": "string",
+            "description": "Caller ID. Defaults to the agent's assigned number."
+          },
+          "customer_name": {
+            "type": "string",
+            "example": "Jane Doe",
+            "description": "Forwarded to the agent as dynamic_variables.lead_name."
+          },
+          "lead_id": {
+            "type": "string"
+          },
+          "lead_description": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Forwarded to the agent as dynamic_variables.lead_desc."
+          },
+          "dynamic_variables": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Extra variables injected into the agent prompt."
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "strict_dnd": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, returns 503 dnd_lookup_failed if the DND check is unavailable."
+          },
+          "first_message": {
+            "type": "string",
+            "description": "Overrides the agent's opening line for this call."
+          }
+        }
+      },
+      "CallCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Call"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "to": {
+                "type": "string"
+              },
+              "call_sid": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reserved_credits": {
+                "type": "number"
+              }
+            }
+          }
+        ]
+      },
+      "CallList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Call"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "CallRecordingResponse": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "recording": {
+            "$ref": "#/components/schemas/Recording"
+          }
+        }
+      },
+      "CallTranscript": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "call_summary_title": {
+            "type": "string"
+          },
+          "call_successful": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "array",
+            "description": "Turn-by-turn conversation entries.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CallHangupResponse": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "canceled",
+              "completed"
+            ]
+          },
+          "hangup_requested": {
+            "type": "boolean"
+          },
+          "already_ended": {
+            "type": "boolean",
+            "description": "True when the call had already ended."
+          },
+          "carrier_warning": {
+            "type": "string",
+            "description": "Present when the carrier hangup request failed."
+          }
+        }
+      },
+      "PhoneNumber": {
+        "type": "object",
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "example": "+15555550100"
+          },
+          "carrier": {
+            "type": "string",
+            "enum": [
+              "exotel",
+              "plivo",
+              "twilio"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound"
+            ]
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ]
+          },
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Present for inbound numbers with an active agent."
+          },
+          "agent_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PhoneNumberList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PhoneNumber"
+            }
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "max_per_carrier": {
+                "type": "integer"
+              },
+              "by_carrier": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "PhoneNumberRequest": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "outbound",
+              "inbound"
+            ],
+            "default": "outbound"
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ],
+            "default": "indian"
+          },
+          "carrier": {
+            "type": "string",
+            "enum": [
+              "exotel",
+              "plivo",
+              "twilio"
+            ],
+            "description": "Carrier to provision on."
+          }
+        }
+      },
+      "PhoneNumberReleaseRequest": {
+        "type": "object",
+        "description": "Direction and region of the number to release. Query parameters with the same names are accepted as a fallback.",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "outbound",
+              "inbound"
+            ],
+            "default": "outbound"
+          },
+          "phone_number_type": {
+            "type": "string",
+            "enum": [
+              "indian",
+              "international"
+            ],
+            "default": "indian"
+          }
+        }
+      },
+      "Lead": {
+        "type": "object",
+        "properties": {
+          "lead_id": {
+            "type": "string"
+          },
+          "lead_name": {
+            "type": "string"
+          },
+          "lead_phone": {
+            "type": "string",
+            "example": "+15555550100"
+          },
+          "lead_description": {
+            "type": "string"
+          },
+          "campaign_id": {
+            "type": "string",
+            "example": "api_leads"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lead_status": {
+            "type": "string",
+            "enum": [
+              "hot",
+              "warm",
+              "cold",
+              "unknown"
+            ]
+          },
+          "classification_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_called": {
+            "type": "boolean"
+          },
+          "latest_call_status": {
+            "type": "string",
+            "example": "not_called"
+          },
+          "callback_requested": {
+            "type": "boolean"
+          },
+          "callback_requested_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "captured_fields": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "LeadCreateRequest": {
+        "type": "object",
+        "required": [
+          "lead_name"
+        ],
+        "properties": {
+          "lead_name": {
+            "type": "string",
+            "example": "Jane Doe"
+          },
+          "lead_phone": {
+            "type": "string",
+            "example": "+15555550100"
+          },
+          "lead_description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "lead_status": {
+            "type": "string",
+            "enum": [
+              "hot",
+              "warm",
+              "cold",
+              "unknown"
+            ],
+            "default": "unknown"
+          },
+          "campaign_id": {
+            "type": "string",
+            "description": "Optional. Must belong to this workspace."
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Optional. Must belong to this workspace."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Optional. Must belong to this workspace."
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Flat key-value map. Max 50 primitive keys."
+          }
+        }
+      },
+      "LeadUpdateRequest": {
+        "type": "object",
+        "description": "Partial update. Only the fields you send are changed.",
+        "properties": {
+          "lead_name": {
+            "type": "string"
+          },
+          "lead_phone": {
+            "type": "string"
+          },
+          "lead_description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "lead_status": {
+            "type": "string",
+            "enum": [
+              "hot",
+              "warm",
+              "cold",
+              "unknown"
+            ]
+          },
+          "callback_requested": {
+            "type": "boolean"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "LeadList": {
+        "type": "object",
+        "properties": {
+          "leads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lead"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "LeadDeleted": {
+        "type": "object",
+        "properties": {
+          "lead_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean",
+            "const": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "campaign_id": {
+            "type": "string"
+          },
+          "campaign_name": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "campaign_type": {
+            "type": "string",
+            "enum": [
+              "with_template",
+              "without_template",
+              "workflow"
+            ]
+          },
+          "execution_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "is_scheduled": {
+            "type": "boolean"
+          },
+          "scheduled_time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "executed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lead_count": {
+            "type": "integer"
+          },
+          "ask_variables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "column": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CampaignCreateRequest": {
+        "type": "object",
+        "required": [
+          "campaign_name"
+        ],
+        "properties": {
+          "campaign_name": {
+            "type": "string",
+            "example": "Q4 Outbound Voice"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Optional. Must belong to this workspace."
+          },
+          "campaign_type": {
+            "type": "string",
+            "enum": [
+              "with_template",
+              "without_template",
+              "workflow"
+            ],
+            "default": "without_template"
+          },
+          "scheduled_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ask_variables": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "required": [
+                "key"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "source": {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                "column": {
+                  "type": "string",
+                  "maxLength": 120
+                }
+              }
+            }
+          }
+        }
+      },
+      "CampaignUpdateRequest": {
+        "type": "object",
+        "description": "Partial update. Blocked with 409 campaign_in_progress while the campaign is running.",
+        "properties": {
+          "campaign_name": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "scheduled_time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "ask_variables": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "CampaignList": {
+        "type": "object",
+        "properties": {
+          "campaigns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Campaign"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "CampaignArchived": {
+        "type": "object",
+        "properties": {
+          "campaign_id": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EnrollLeadsRequest": {
+        "type": "object",
+        "required": [
+          "leads"
+        ],
+        "properties": {
+          "leads": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "required": [
+                "lead_name",
+                "lead_phone"
+              ],
+              "properties": {
+                "lead_name": {
+                  "type": "string"
+                },
+                "lead_phone": {
+                  "type": "string",
+                  "example": "+15555550100"
+                },
+                "lead_description": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "variables": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "EnrollLeadsResponse": {
+        "type": "object",
+        "properties": {
+          "campaign_id": {
+            "type": "string"
+          },
+          "enrolled_count": {
+            "type": "integer"
+          },
+          "enrolled_lead_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rejected": {
+            "type": "array",
+            "description": "Rows that failed validation. The rest are still enrolled.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer"
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WebhookEndpoint": {
+        "type": "object",
+        "properties": {
+          "webhook_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "auth_type": {
+            "type": "string",
+            "enum": [
+              "hmac"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "custom_header_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
+          "consecutive_failures": {
+            "type": "integer"
+          },
+          "last_success_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_failure_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_failure_reason": {
+            "type": "string"
+          },
+          "disabled_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookCreateRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "webhook_url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "webhook_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Must be a public HTTPS URL."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Defaults to post_call_transcription and call_initiation_failure."
+          },
+          "request_headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Custom headers sent with each delivery."
+          },
+          "set_as_workspace_default": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "WebhookCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebhookEndpoint"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "webhook_secret": {
+                "type": "string",
+                "description": "HMAC signing secret. Shown only once.",
+                "example": "whsec_..."
+              },
+              "warning": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "WebhookUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "webhook_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "request_headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          }
+        }
+      },
+      "WebhookSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "default_post_call_webhook_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_webhook_events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WebhookSettings": {
+        "type": "object",
+        "properties": {
+          "default_post_call_webhook_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_webhook_events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WebhookList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEndpoint"
+            }
+          },
+          "workspace_settings": {
+            "$ref": "#/components/schemas/WebhookSettings"
+          },
+          "supported_events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WebhookDeleted": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "const": true
+          },
+          "webhook_id": {
+            "type": "string"
+          },
+          "detached_agent_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WebhookDelivery": {
+        "type": "object",
+        "properties": {
+          "delivery_id": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "example": "post_call_transcription"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "delivered",
+              "failed",
+              "dead"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "max_attempts": {
+            "type": "integer"
+          },
+          "next_retry_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_status_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "delivered_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookDeliveryList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookDelivery"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/me": {
+      "get": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "getWorkspaceIdentity",
+        "summary": "Inspect API key identity, workspace, and scopes",
+        "responses": {
+          "200": {
+            "description": "Workspace and key identity.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/wallet": {
+      "get": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "getWallet",
+        "summary": "Read workspace call credit balances",
+        "responses": {
+          "200": {
+            "description": "Credit balances and rate card.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Wallet"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "listApiKeys",
+        "summary": "List workspace API keys",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Returns metadata only. Secrets are never returned after creation."
+      },
+      "post": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "createApiKey",
+        "summary": "Mint a scoped revocable API key (max 25 active per workspace)",
+        "responses": {
+          "201": {
+            "description": "Key created. Store api_key now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "The secret `api_key` is returned exactly once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys/{keyId}/rotate": {
+      "post": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "rotateApiKey",
+        "summary": "Rotate an API key",
+        "responses": {
+          "201": {
+            "description": "Replacement key created. Store api_key now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyRotated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Mints a replacement with the same name, scopes, default bot, IP allowlist and expiry, then retires the old key. The old key is revoked immediately unless `grace_period_seconds` is set, in which case it keeps working until the grace period ends. The new secret `api_key` is returned exactly once. The caller must already hold every scope of the key being rotated.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/KeyId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyRotateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys/{keyId}": {
+      "delete": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "revokeApiKey",
+        "summary": "Revoke an API key immediately",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyRevoked"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/KeyId"
+          }
+        ]
+      }
+    },
+    "/agents": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "listAgents",
+        "summary": "List active voice agents",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "inbound",
+                "outbound"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "createAgent",
+        "summary": "Create a Pipecat voice agent",
+        "responses": {
+          "201": {
+            "description": "Agent created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "`bot_id` is optional. When omitted, the workspace's first bot is used, or one is created automatically.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agentId}": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "getAgent",
+        "summary": "Get voice agent details",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "updateAgent",
+        "summary": "Update voice agent or attach a per-agent webhook",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentUpdateRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "archiveAgent",
+        "summary": "Archive (soft-delete) a voice agent",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentArchived"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Call and billing history are preserved. Later dials return 410 agent_archived.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      }
+    },
+    "/agents/{agentId}/activate-inbound": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "activateInboundAgent",
+        "summary": "Activate inbound agent on DID (demotes sibling inbound agents)",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInboundChange"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      }
+    },
+    "/agents/{agentId}/deactivate-inbound": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "deactivateInboundAgent",
+        "summary": "Deactivate inbound DID routing for agent",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInboundChange"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      }
+    },
+    "/phone-numbers": {
+      "get": {
+        "tags": [
+          "Phone Numbers"
+        ],
+        "operationId": "listPhoneNumbers",
+        "summary": "List provisioned carrier DIDs and per-carrier limits",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneNumberList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Phone Numbers"
+        ],
+        "operationId": "releasePhoneNumber",
+        "summary": "Release a provisioned carrier DID",
+        "responses": {
+          "200": {
+            "description": "Release result. Shape depends on the carrier."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Releasing a number can affect agents assigned to it.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneNumberReleaseRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/phone-numbers/provision": {
+      "post": {
+        "tags": [
+          "Phone Numbers"
+        ],
+        "operationId": "provisionPhoneNumber",
+        "summary": "Provision an outbound or inbound DID (max 2 per carrier)",
+        "responses": {
+          "200": {
+            "description": "Provisioning result. The response shape is carrier-specific and is delegated to the legacy phone controller; it is not yet modeled as a schema."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneNumberRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls": {
+      "get": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "listCalls",
+        "summary": "List calls",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Filter by agent_id, status, or direction.",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "inbound",
+                "outbound"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "createCall",
+        "summary": "Initiate an idempotent, compliance-gated outbound call",
+        "responses": {
+          "201": {
+            "description": "Call initiated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "description": "Send an `Idempotency-Key` header so retries never dial twice. Reusing a key with a different body returns 422 idempotency_key_reused. Calls pass wallet, TRAI quiet-hours, NDNC/DND, abuse-tier, and concurrency gates.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Unique key for this request. Retrying with the same key and body returns the original response instead of dialing again.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/{callId}": {
+      "get": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "getCall",
+        "summary": "Get call status, billing, and recording",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Call"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallId"
+          }
+        ]
+      }
+    },
+    "/calls/{callId}/recording": {
+      "get": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "getCallRecording",
+        "summary": "Get a short-lived recording URL",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallRecordingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Returns 404 recording_not_ready until the carrier upload completes. Poll at about 1, 5, and 10 minutes after hangup, or subscribe to call_recording_ready.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallId"
+          }
+        ]
+      }
+    },
+    "/calls/{callId}/transcript": {
+      "get": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "getCallTranscript",
+        "summary": "Get call transcript and summary",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTranscript"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Transcripts are kept for 90 days. After that the endpoint returns 410 transcript_expired.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallId"
+          }
+        ]
+      }
+    },
+    "/calls/{callId}/hangup": {
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "operationId": "hangupCall",
+        "summary": "Hang up an active call and release its concurrency slot",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallHangupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Safe to retry. Calls that already ended return `already_ended: true`.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallId"
+          }
+        ]
+      }
+    },
+    "/leads": {
+      "get": {
+        "tags": [
+          "Leads"
+        ],
+        "operationId": "listLeads",
+        "summary": "List active leads for the workspace",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Phone filters match on a hash, so the stored phone number is never compared in plaintext.",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lead_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hot",
+                "warm",
+                "cold",
+                "unknown"
+              ]
+            }
+          },
+          {
+            "name": "is_called",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "phone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Leads"
+        ],
+        "operationId": "createLead",
+        "summary": "Create a lead",
+        "responses": {
+          "201": {
+            "description": "Lead created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "`campaign_id`, `agent_id`, and `bot_id` are optional and must belong to the workspace when provided.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads/{leadId}": {
+      "get": {
+        "tags": [
+          "Leads"
+        ],
+        "operationId": "getLead",
+        "summary": "Get lead details",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LeadId"
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Leads"
+        ],
+        "operationId": "updateLead",
+        "summary": "Partially update lead fields or variables",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lead"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "`variables` are merged into the existing map.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LeadId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadUpdateRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Leads"
+        ],
+        "operationId": "deleteLead",
+        "summary": "Soft-delete a lead",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadDeleted"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Call history is preserved. Later reads return 410 lead_deleted.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LeadId"
+          }
+        ]
+      }
+    },
+    "/campaigns": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "listCampaigns",
+        "summary": "List active campaigns for the workspace",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "execution_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "in_progress",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "createCampaign",
+        "summary": "Create a campaign",
+        "responses": {
+          "201": {
+            "description": "Campaign created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "`bot_id` is optional and must belong to the workspace when provided.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "getCampaign",
+        "summary": "Get campaign details",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CampaignId"
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "updateCampaign",
+        "summary": "Partially update a campaign that is not running",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CampaignId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpdateRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "archiveCampaign",
+        "summary": "Soft-archive a campaign",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignArchived"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Pending or running campaigns are cancelled first. Later reads return 410 campaign_archived.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CampaignId"
+          }
+        ]
+      }
+    },
+    "/campaigns/{campaignId}/leads": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "enrollCampaignLeads",
+        "summary": "Bulk-enroll up to 500 leads into a campaign",
+        "responses": {
+          "201": {
+            "description": "Leads processed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollLeadsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Each row is validated on its own. Invalid rows are reported in `rejected`, and the valid rows are still enrolled.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CampaignId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollLeadsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}/cancel": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "operationId": "cancelCampaign",
+        "summary": "Cancel a pending or in-progress campaign",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CampaignId"
+          }
+        ]
+      }
+    },
+    "/workspace/webhooks": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "listWebhooks",
+        "summary": "List workspace webhook endpoints and default settings",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "createWebhook",
+        "summary": "Create an HTTPS HMAC-signed webhook endpoint",
+        "responses": {
+          "201": {
+            "description": "Endpoint created. Store webhook_secret now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "The `webhook_secret` is returned exactly once. Use it to verify the `Jaano-Signature` header.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspace/webhooks/settings": {
+      "patch": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "updateWorkspaceWebhookSettings",
+        "summary": "Set the workspace default post-call webhook",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookSettingsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspace/webhooks/{webhookId}": {
+      "patch": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "updateWebhook",
+        "summary": "Update webhook URL, events, headers, or status",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookEndpoint"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookUpdateRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "deleteWebhook",
+        "summary": "Delete a webhook endpoint",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeleted"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Returns 409 webhook_in_use if agents are attached. Pass `?force=true` to detach them automatically.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ]
+      }
+    },
+    "/workspace/webhooks/{webhookId}/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "testWebhook",
+        "summary": "Send a signed webhook.test ping",
+        "responses": {
+          "200": {
+            "description": "Ping result."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          }
+        ]
+      }
+    },
+    "/workspace/webhooks/{webhookId}/deliveries": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "listWebhookDeliveries",
+        "summary": "List recent delivery attempts",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Delivery logs are kept for 30 days.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      }
+    }
+  }
+}

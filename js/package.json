@@ -1,0 +1,44 @@
+{
+  "name": "@jaano-sdk/js",
+  "version": "1.3.0",
+  "description": "Official Jaano Enterprise Developer API v1 SDK for Node.js and TypeScript",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src/"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "jaano",
+    "voice-ai",
+    "telephony",
+    "sdk",
+    "openapi"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janoo-ai/jaano-sdks.git",
+    "directory": "js"
+  },
+  "homepage": "https://github.com/janoo-ai/jaano-sdks/tree/main/js#readme",
+  "bugs": {
+    "url": "https://github.com/janoo-ai/jaano-sdks/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
