@@ -4,7 +4,7 @@
 
 Please **do not** open a public GitHub issue for security problems.
 
-Email **security@jaano.ai** with:
+Email **info@jaano.ai** with:
 - the affected package and version (`@jaano-sdk/js`, `@jaano-sdk/widget`, or `jaano` on PyPI),
 - steps to reproduce, and
 - the impact you believe it has.
