@@ -31,6 +31,7 @@ export interface JaanoClientConfig {
   timeoutMs?: number;
   maxRetries?: number;
   retryBaseDelayMs?: number;
+  maxRetryDelayMs?: number;
   fetch?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -55,6 +56,7 @@ export declare class JaanoClient {
     wallet(): Promise<Types.Wallet>;
     listApiKeys(): Promise<Types.ApiKeyList>;
     createApiKey(body: Types.ApiKeyCreateRequest): Promise<Types.ApiKeyCreated>;
+    rotateApiKey(keyId: string, body?: Types.ApiKeyRotateRequest): Promise<Types.ApiKeyRotated>;
     revokeApiKey(keyId: string): Promise<Types.ApiKeyRevoked>;
   };
 

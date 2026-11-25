@@ -172,9 +172,7 @@ export class JaanoWidget {
       display: "block",
     });
     iframe.addEventListener("load", () => {
-      this._ready = true;
-      this._flushPending();
-      this._safeCall(c.onReady);
+      this._markReady();
     });
 
     container.appendChild(iframe);
@@ -187,7 +185,8 @@ export class JaanoWidget {
     button.setAttribute("aria-label", "Open Jaano chat");
     Object.assign(button.style, {
       position: "fixed",
-      bottom: "20px",
+      bottom: isTop ? "auto" : "20px",
+      top: isTop ? "20px" : "auto",
       left: isLeft ? "20px" : "auto",
       right: isLeft ? "auto" : "20px",
       width: "56px",
@@ -283,6 +282,21 @@ export class JaanoWidget {
     }
   }
 
+  _markReady() {
+    const firstReady = !this._ready;
+    this._ready = true;
+    // Always post an init handshake so the iframe learns our exact origin
+    // even if open() was called before React mounted its message listener.
+    this._post({ type: "JAANO_WIDGET_INIT", source: "jaano_widget_pkg" });
+    if (this._open) {
+      this._post({ type: "CHAT_OPENED", source: "jaano_widget_pkg" });
+    }
+    this._flushPending();
+    if (firstReady) {
+      this._safeCall(this._config.onReady);
+    }
+  }
+
   _flushPending() {
     while (this._pendingMessages.length > 0) {
       const q = this._pendingMessages.shift();
@@ -293,7 +307,7 @@ export class JaanoWidget {
   _handleMessage(event) {
     // Strict origin & source pinning — ignore messages from any other origin or window.
     if (!event || event.origin !== this._config.widgetOrigin) return;
-    if (this._iframe?.contentWindow && event.source && event.source !== this._iframe.contentWindow) {
+    if (this._iframe?.contentWindow && event.source !== this._iframe.contentWindow) {
       return;
     }
 
@@ -301,6 +315,9 @@ export class JaanoWidget {
     if (!payload || !payload.type) return;
 
     switch (payload.type) {
+      case "JAANO_IFRAME_READY":
+        this._markReady();
+        break;
       case "CLOSE_CHATBOT":
       case "closeChatbot":
         this.close();

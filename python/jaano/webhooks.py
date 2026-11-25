@@ -52,7 +52,10 @@ def verify_webhook_signature(
             f"Webhook timestamp outside tolerance ({tolerance_seconds}s)."
         )
 
-    body_str = raw_body.decode("utf-8") if isinstance(raw_body, bytes) else str(raw_body)
+    try:
+        body_str = raw_body.decode("utf-8") if isinstance(raw_body, bytes) else str(raw_body)
+    except UnicodeDecodeError as exc:
+        raise JaanoWebhookVerificationError("Webhook body is not valid UTF-8.") from exc
     expected = hmac.new(
         secret.encode("utf-8"),
         f"{timestamp}.{body_str}".encode("utf-8"),

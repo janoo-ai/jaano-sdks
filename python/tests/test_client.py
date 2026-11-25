@@ -24,6 +24,10 @@ class TestJaanoClient(unittest.TestCase):
             JaanoClient("")
         with self.assertRaises(ValueError):
             JaanoClient("   ")
+        with self.assertRaises(ValueError):
+            JaanoClient("jaano_live_test", timeout_seconds=0)
+        with self.assertRaises(ValueError):
+            JaanoClient("jaano_live_test", timeout_seconds=-1.0)
 
     def test_version_matches_openapi_spec(self) -> None:
         spec_path = pathlib.Path(__file__).resolve().parents[2] / "openapi" / "openapi.v1.json"
@@ -169,6 +173,79 @@ class TestJaanoClient(unittest.TestCase):
         with self.assertRaises(JaanoNetworkError):
             client.workspace.me()
 
+    def test_rotate_api_key(self) -> None:
+        seen = []
+
+        def transport(method, url, headers, body, timeout):
+            seen.append((method, url, body))
+            return TransportResponse(
+                status=201,
+                headers={},
+                body=json.dumps({"rotated": True, "key_id": "key_new", "api_key": "jaano_live_new"}),
+            )
+
+        client = JaanoClient("jaano_live_test", transport=transport)
+        res = client.workspace.rotate_api_key("key_old", {"grace_period_seconds": 600})
+        self.assertTrue(res["rotated"])
+        self.assertEqual(seen[0][0], "POST")
+        self.assertEqual(seen[0][1], "https://api.jaano.ai/v1/api-keys/key_old/rotate")
+        self.assertEqual(json.loads(seen[0][2]), {"grace_period_seconds": 600})
+
+    def test_does_not_retry_non_idempotent_post_on_5xx_without_idempotency_key(self) -> None:
+        attempts = 0
+
+        def transport(*_args):
+            nonlocal attempts
+            attempts += 1
+            return TransportResponse(
+                status=503,
+                headers={},
+                body=json.dumps({"code": "service_unavailable", "message": "Busy"}),
+            )
+
+        client = JaanoClient("jaano_live_test", max_retries=2, transport=transport, sleep=lambda _: None)
+        with self.assertRaises(JaanoApiError):
+            client.calls.create({"agent_id": "a", "to": "+15555550100"})
+        self.assertEqual(attempts, 1)
+
+        # With idempotency_key, 503 IS retried
+        attempts = 0
+
+        def transport_recover(*_args):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return TransportResponse(status=503, headers={}, body='{"code":"service_unavailable"}')
+            return TransportResponse(status=201, headers={}, body='{"call_id":"call_ok"}')
+
+        client_idem = JaanoClient(
+            "jaano_live_test", max_retries=2, transport=transport_recover, sleep=lambda _: None
+        )
+        out = client_idem.calls.create({"agent_id": "a", "to": "+15555550100"}, idempotency_key="idem-1")
+        self.assertEqual(out["call_id"], "call_ok")
+        self.assertEqual(attempts, 2)
+
+    def test_caps_retry_after_delay(self) -> None:
+        sleeps: list[float] = []
+        attempts = 0
+
+        def transport(*_args):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return TransportResponse(status=429, headers={"retry-after": "86400"}, body="{}")
+            return TransportResponse(status=200, headers={}, body='{"ok": true}')
+
+        client = JaanoClient(
+            "jaano_live_test",
+            max_retries=1,
+            max_retry_delay_seconds=5.0,
+            transport=transport,
+            sleep=sleeps.append,
+        )
+        client.workspace.me()
+        self.assertEqual(sleeps, [5.0])
+
 
 class TestWebhookSignature(unittest.TestCase):
     secret = "whsec_py_test_secret"
@@ -200,6 +277,8 @@ class TestWebhookSignature(unittest.TestCase):
             )
         with self.assertRaises(JaanoWebhookVerificationError):
             verify_webhook_signature(self.body, "bad-header", self.secret, now_seconds=self.now)
+        with self.assertRaises(JaanoWebhookVerificationError):
+            verify_webhook_signature(b"\xff\xfe", valid, self.secret, now_seconds=self.now)
 
 
 if __name__ == "__main__":
