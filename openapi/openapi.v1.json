@@ -562,9 +562,86 @@
             ],
             "format": "date-time"
           },
+          "rate_limit_per_min": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Optional per-key ceiling (requests/minute per endpoint class). null uses the default per-key share of the workspace limit."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ApiKeyAuditEvent": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "api_key.created",
+              "api_key.rotated",
+              "api_key.revoked",
+              "api_key.deleted"
+            ]
+          },
+          "target_type": {
+            "type": "string",
+            "example": "api_key"
+          },
+          "target_id": {
+            "type": "string",
+            "example": "key_0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+          },
+          "actor_user_id": {
+            "type": "string"
+          },
+          "actor_email": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Non-secret details such as key name, prefix, and scopes."
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiKeyAuditList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyAuditEvent"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "skip": {
+                "type": "integer"
+              }
+            }
           }
         }
       },
@@ -578,6 +655,21 @@
             "type": "string",
             "maxLength": 120,
             "example": "CRM Dialer Backend"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "test"
+            ],
+            "default": "live",
+            "description": "Key mode. 'test' mints a sk_test_ key that never spends credits, places real calls, or sends WhatsApp messages."
+          },
+          "rate_limit_per_min": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Optional per-key ceiling for this key (requests/minute per endpoint class). Omit to use the default share of the workspace limit."
           },
           "scopes": {
             "type": "array",
@@ -2297,6 +2389,18 @@
             "$ref": "#/components/schemas/PageMeta"
           }
         }
+      },
+      "WebhookDeliveryResent": {
+        "type": "object",
+        "properties": {
+          "resent": {
+            "type": "boolean",
+            "example": true
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/WebhookDelivery"
+          }
+        }
       }
     }
   },
@@ -2365,6 +2469,48 @@
             "$ref": "#/components/responses/InternalError"
           }
         }
+      }
+    },
+    "/api-keys/audit": {
+      "get": {
+        "tags": [
+          "Workspace"
+        ],
+        "operationId": "listApiKeyAuditEvents",
+        "summary": "List API key lifecycle events",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyAuditList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Newest first. Covers created, rotated, revoked, and deleted events for this workspace's API keys. Secrets are never included.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          }
+        ]
       }
     },
     "/api-keys": {
@@ -2510,7 +2656,7 @@
           "Workspace"
         ],
         "operationId": "revokeApiKey",
-        "summary": "Revoke an API key immediately",
+        "summary": "Revoke or permanently delete an API key",
         "responses": {
           "200": {
             "description": "Success.",
@@ -2538,9 +2684,20 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
+        "description": "Revokes an active API key immediately by default. Pass `permanent=true` to permanently delete an active, expired, or revoked key record from the workspace.",
         "parameters": [
           {
             "$ref": "#/components/parameters/KeyId"
+          },
+          {
+            "name": "permanent",
+            "in": "query",
+            "required": false,
+            "description": "Set to true to permanently remove the key record instead of only revoking it.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ]
       }
@@ -4308,6 +4465,60 @@
           },
           {
             "$ref": "#/components/parameters/Offset"
+          }
+        ]
+      }
+    },
+    "/workspace/webhooks/{webhookId}/deliveries/{deliveryId}/resend": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "resendWebhookDelivery",
+        "summary": "Resend a previous webhook delivery",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryResent"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "description": "Resets the delivery record to pending and attempts an immediate signed HMAC-SHA256 redelivery.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookId"
+          },
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Webhook delivery ID (whd_...)."
           }
         ]
       }

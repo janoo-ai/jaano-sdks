@@ -137,6 +137,15 @@ class WorkspaceResource(_Resource):
     def revoke_api_key(self, key_id: str) -> dict[str, Any]:
         return self._client._request("DELETE", f"/api-keys/{_encode_segment(key_id, 'key_id')}")
 
+    def delete_api_key(self, key_id: str) -> dict[str, Any]:
+        """Permanently delete an API key."""
+        return self._client._request(
+            "DELETE", f"/api-keys/{_encode_segment(key_id, 'key_id')}?permanent=true"
+        )
+
+    def list_api_key_audit(self, **params: Any) -> dict[str, Any]:
+        return self._client._request("GET", f"/api-keys/audit{_build_query(params)}")
+
 
 class AgentsResource(_Resource):
     def list(self, **params: Any) -> dict[str, Any]:
@@ -291,6 +300,13 @@ class WebhooksResource(_Resource):
         return self._client._request(
             "GET",
             f"/workspace/webhooks/{_encode_segment(webhook_id, 'webhook_id')}/deliveries{_build_query(params)}",
+        )
+
+    def resend(self, webhook_id: str, delivery_id: str) -> dict[str, Any]:
+        return self._client._request(
+            "POST",
+            f"/workspace/webhooks/{_encode_segment(webhook_id, 'webhook_id')}"
+            f"/deliveries/{_encode_segment(delivery_id, 'delivery_id')}/resend",
         )
 
     verify_signature = staticmethod(verify_webhook_signature)

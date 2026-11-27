@@ -96,6 +96,9 @@ export class JaanoClient {
         this._request("POST", `/api-keys/${encodeSegment(keyId, "keyId")}/rotate`, { body }),
       revokeApiKey: (keyId) =>
         this._request("DELETE", `/api-keys/${encodeSegment(keyId, "keyId")}`),
+      deleteApiKey: (keyId) =>
+        this._request("DELETE", `/api-keys/${encodeSegment(keyId, "keyId")}?permanent=true`),
+      listApiKeyAudit: (params) => this._request("GET", `/api-keys/audit${buildQuery(params)}`),
     };
 
     this.agents = {
@@ -185,6 +188,14 @@ export class JaanoClient {
         this._request(
           "GET",
           `/workspace/webhooks/${encodeSegment(webhookId, "webhookId")}/deliveries${buildQuery(params)}`,
+        ),
+      resend: (webhookId, deliveryId) =>
+        this._request(
+          "POST",
+          `/workspace/webhooks/${encodeSegment(webhookId, "webhookId")}/deliveries/${encodeSegment(
+            deliveryId,
+            "deliveryId",
+          )}/resend`,
         ),
       verifySignature: verifyWebhookSignature,
     };
