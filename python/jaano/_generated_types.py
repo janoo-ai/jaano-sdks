@@ -59,10 +59,27 @@ class ApiKey(TypedDict, total=False):
     expires_at: Optional[str]
     revoked_at: Optional[str]
     last_used_at: Optional[str]
+    rate_limit_per_min: Optional[int]
     created_at: str
+
+class ApiKeyAuditEvent(TypedDict, total=False):
+    event_id: str
+    action: Literal["api_key.created", "api_key.rotated", "api_key.revoked", "api_key.deleted"]
+    target_type: str
+    target_id: str
+    actor_user_id: str
+    actor_email: str
+    metadata: dict[str, Any]
+    created_at: Optional[str]
+
+class ApiKeyAuditList(TypedDict, total=False):
+    data: list["ApiKeyAuditEvent"]
+    meta: dict[str, Any]
 
 class ApiKeyCreateRequest(TypedDict, total=False):
     name: str
+    mode: Literal["live", "test"]
+    rate_limit_per_min: int
     scopes: list[str]
     expires_at: Optional[str]
     allowed_ips: list[str]
@@ -79,6 +96,7 @@ class ApiKeyCreated(TypedDict, total=False):
     expires_at: Optional[str]
     revoked_at: Optional[str]
     last_used_at: Optional[str]
+    rate_limit_per_min: Optional[int]
     created_at: str
     api_key: str
     warning: str
@@ -482,3 +500,7 @@ class WebhookDelivery(TypedDict, total=False):
 class WebhookDeliveryList(TypedDict, total=False):
     data: list["WebhookDelivery"]
     meta: "PageMeta"
+
+class WebhookDeliveryResent(TypedDict, total=False):
+    resent: bool
+    delivery: "WebhookDelivery"

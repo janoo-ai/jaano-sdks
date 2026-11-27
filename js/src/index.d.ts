@@ -58,6 +58,10 @@ export declare class JaanoClient {
     createApiKey(body: Types.ApiKeyCreateRequest): Promise<Types.ApiKeyCreated>;
     rotateApiKey(keyId: string, body?: Types.ApiKeyRotateRequest): Promise<Types.ApiKeyRotated>;
     revokeApiKey(keyId: string): Promise<Types.ApiKeyRevoked>;
+    /** Permanently delete an API key (`DELETE /api-keys/:keyId?permanent=true`). */
+    deleteApiKey(keyId: string): Promise<unknown>;
+    /** Paginated, newest-first API key audit events (never includes secrets). */
+    listApiKeyAudit(params?: { limit?: number; skip?: number }): Promise<unknown>;
   };
 
   readonly agents: {
@@ -111,6 +115,8 @@ export declare class JaanoClient {
     delete(webhookId: string, options?: { force?: boolean }): Promise<Types.WebhookDeleted>;
     test(webhookId: string): Promise<unknown>;
     listDeliveries(webhookId: string, params?: { limit?: number; offset?: number }): Promise<Types.WebhookDeliveryList>;
+    /** Manually re-deliver a delivery record (`POST .../deliveries/:deliveryId/resend`). */
+    resend(webhookId: string, deliveryId: string): Promise<unknown>;
     verifySignature: typeof verifyWebhookSignature;
   };
 }

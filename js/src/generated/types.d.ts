@@ -80,10 +80,31 @@ export type ApiKey = {
   expires_at?: string | null;
   revoked_at?: string | null;
   last_used_at?: string | null;
+  rate_limit_per_min?: number | null;
   created_at?: string;
+};
+export type ApiKeyAuditEvent = {
+  event_id?: string;
+  action?: "api_key.created" | "api_key.rotated" | "api_key.revoked" | "api_key.deleted";
+  target_type?: string;
+  target_id?: string;
+  actor_user_id?: string;
+  actor_email?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string | null;
+};
+export type ApiKeyAuditList = {
+  data?: Array<ApiKeyAuditEvent>;
+  meta?: {
+    total?: number;
+    limit?: number;
+    skip?: number;
+  };
 };
 export type ApiKeyCreateRequest = {
   name: string;
+  mode?: "live" | "test";
+  rate_limit_per_min?: number;
   scopes?: Array<string>;
   expires_at?: string | null;
   allowed_ips?: Array<string>;
@@ -480,4 +501,8 @@ export type WebhookDelivery = {
 export type WebhookDeliveryList = {
   data?: Array<WebhookDelivery>;
   meta?: PageMeta;
+};
+export type WebhookDeliveryResent = {
+  resent?: boolean;
+  delivery?: WebhookDelivery;
 };

@@ -135,6 +135,25 @@ describe("@jaano-sdk/js — resource endpoints", () => {
     assert.equal(seen[0].url, "https://api.jaano.ai/v1/api-keys/key_old/rotate");
     assert.deepEqual(JSON.parse(seen[0].body), { grace_period_seconds: 3600 });
   });
+
+  it("covers permanent delete, API key audit, and webhook resend endpoints", async () => {
+    const seen = [];
+    const client = new JaanoClient({
+      apiKey: "jaano_live_test",
+      fetch: async (url, init) => {
+        seen.push({ url, method: init.method });
+        return mockResponse(200, { ok: true });
+      },
+    });
+    await client.workspace.deleteApiKey("key_1");
+    await client.workspace.listApiKeyAudit({ limit: 10 });
+    await client.webhooks.resend("wh_1", "whd_1");
+    assert.deepEqual(seen, [
+      { url: "https://api.jaano.ai/v1/api-keys/key_1?permanent=true", method: "DELETE" },
+      { url: "https://api.jaano.ai/v1/api-keys/audit?limit=10", method: "GET" },
+      { url: "https://api.jaano.ai/v1/workspace/webhooks/wh_1/deliveries/whd_1/resend", method: "POST" },
+    ]);
+  });
 });
 
 describe("@jaano-sdk/js — retries, errors, and timeouts", () => {
